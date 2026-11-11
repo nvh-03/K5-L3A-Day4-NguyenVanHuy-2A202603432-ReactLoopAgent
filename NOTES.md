@@ -44,3 +44,9 @@ Nguyên nhân có thể xảy ra: câu trả lời dành nhiều chỗ liệt k�
 ## 5. Giới hạn
 
 Điểm judge là ước lượng, có thể thiên lệch hoặc lỗi định dạng. Snapshot core được chụp ngày 09/11/2026 và tool chỉ tìm trong tối đa 50 incident gần nhất; nó không thể xác nhận lịch sử ngoài dữ liệu đó hoặc trạng thái live. Mỗi báo cáo hiện chấm đủ 22 case và cùng cấu hình OpenRouter/GPT-4o-mini. Tuy vậy, `eval_before.json` được chạy lại sau khi thay đổi agent đã có trong workspace, nên không đại diện cho code trước cải tiến; cần lưu baseline trước khi thay đổi trong lần thực hành sau để so sánh nhân quả hợp lệ.
+
+## 6. Demo CP7
+
+- Trace nhiều bước chạy thành công với snapshot: `get_status` (step 1) → `get_incident_details` (step 2) → câu trả lời cuối (step 3), có URL incident Cloudflare.
+- Trace lỗi giả lập: `get_status` trả `TimeoutError`; agent hoàn tất ở step 2 bằng cách nói rõ không xác minh được trạng thái, không suy luận outage.
+- Còn thao tác thủ công: xác nhận tên repo theo quy tắc trong `SUBMISSION.md` và nộp link repo lên LMS.
