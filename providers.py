@@ -1,6 +1,7 @@
 """Bốn provider cùng một interface. Không chứa agent loop."""
 import json
 import os
+from pathlib import Path
 import urllib.error
 import urllib.request
 
@@ -8,8 +9,40 @@ CONFIG = {
     'openai': ('OPENAI_API_KEY', 'https://api.openai.com/v1/chat/completions'),
     'gemini': ('GEMINI_API_KEY', 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'),
     'openrouter': ('OPENROUTER_API_KEY', 'https://openrouter.ai/api/v1/chat/completions'),
+    'starimg': ('STARIMG_API_KEY', 'https://ai.starimg.ru/v1/chat/completions'),
     'anthropic': ('ANTHROPIC_API_KEY', 'https://api.anthropic.com/v1/messages'),
 }
+
+
+def load_env_file(path=None):
+    """Load simple KEY=VALUE entries without overriding process environment."""
+    path = Path(path) if path is not None else Path(__file__).with_name('.env')
+    try:
+        lines = path.read_text(encoding='utf-8-sig').splitlines()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise RuntimeError(f'Không đọc được file cấu hình {path.name}: {exc}') from exc
+
+    for line_number, line in enumerate(lines, start=1):
+        entry = line.strip()
+        if not entry or entry.startswith('#'):
+            continue
+        if entry.startswith('export '):
+            entry = entry[len('export '):].lstrip()
+        key, separator, value = entry.partition('=')
+        key = key.strip()
+        if (
+            not separator
+            or not key
+            or not (key[0].isalpha() or key[0] == '_')
+            or not all(character.isalnum() or character == '_' for character in key)
+        ):
+            raise ValueError(f'Cấu hình .env không hợp lệ ở dòng {line_number}.')
+        value = value.strip()
+        if len(value) >= 2 and value[0] in "'\"" and value[-1] == value[0]:
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
 
 
 def post_json(url, headers, payload):
@@ -31,6 +64,7 @@ class Provider:
     cần được append nguyên vẹn; tool result có role, tool_call_id, content (JSON string).
     """
     def __init__(self, name, model):
+        load_env_file()
         if name not in CONFIG:
             raise ValueError(f'Provider không hợp lệ: {name}')
         if not model:

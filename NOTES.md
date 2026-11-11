@@ -1,39 +1,46 @@
 # Ghi chú phân tích · Day 04
 
-Họ và tên:
-MSSV:
+Họ và tên: nguyễn văn huy
+MSSV: 2A202603432
 
 ## 1. Case được chọn
 
-- ID case:
-- Câu trả lời của agent:
-- Điểm ở lần chạy 1:
+- ID case: A5
+- Câu trả lời của agent: Agent liệt kê năm incident Actions gần đây từ năm 2026, rồi nói không thể khẳng định không có incident năm 2025.
+- Điểm trong eval baseline hiện tại: 85/100 (judge; tham khảo).
 
 ## 2. Bằng chứng trong trace
 
-Dán đoạn trace chứng minh lỗi và nêu nguyên nhân có thể xảy ra.
+Trace `get_status` cho `provider=github`, `component=GitHub Actions` ghi nhận:
 
 ```text
-
+captured_at: 2026-11-09T03:50:47.065020+00:00
+matching_incidents_in_last_50: 11
+note: Chỉ tìm theo chuỗi trong 50 incident gần nhất; không tìm thấy không chứng minh không có sự cố.
+Các incident trả về có updated_at trong tháng 10–11/2026; trace không cung cấp dữ liệu năm 2025.
 ```
+
+Nguyên nhân có thể xảy ra: câu trả lời dành nhiều chỗ liệt kê incident gần đây dù không trả lời được giai đoạn năm 2025, dễ tạo ấn tượng rằng dữ liệu gần đây có thể thay thế bằng chứng lịch sử.
 
 ## 3. Thay đổi đã thực hiện
 
-- Sửa gì, ở đâu:
-- Vì sao chọn thay đổi này:
+- Sửa gì, ở đâu: Làm rõ `SYSTEM_PROMPT` trong `agent.py`: chỉ dùng mốc thời gian có trong tool, nêu giới hạn snapshot/50 incident, không suy luận cho giai đoạn ngoài dữ liệu, và nói rõ provider chưa xác minh được khi tool lỗi. Thêm test kiểm tra các chỉ dẫn được đưa vào system message.
+- Vì sao chọn thay đổi này: Phản hồi judge của A5 nêu nguy cơ câu trả lời gây hiểu nhầm về năm 2025; đây là thay đổi prompt nhỏ, không sửa dataset hay grading.
 
 ## 4. So sánh hai lần chạy
 
 | Chỉ số | `eval_before.json` | `eval_after.json` |
 |---|---|---|
-| Điểm tổng |  |  |
-| Điểm case đã chọn |  |  |
-| Số model calls |  |  |
-| Token, chi phí nếu có |  |  |
+| Điểm tổng | 80.00 (22/22 case) | 84.09 (22/22 case) |
+| Điểm case đã chọn (A5) | 85 | 75 |
+| Agent model calls | 49 | 48 |
+| Tổng token (input + output; agent và judge) | 74,177 | 76,249 |
+| Cấu hình | OpenRouter / `openai/gpt-4o-mini` | OpenRouter / `openai/gpt-4o-mini` |
 
-- Lỗi đã giải quyết:
-- Lỗi còn lại hoặc mới xuất hiện:
+- Kết quả lần eval sau: Điểm tổng tăng từ 80.00 lên 84.09; một lần chạy cho mỗi phiên bản không chứng minh tính ổn định.
+- Lỗi còn lại hoặc mới xuất hiện: H2 được 50 và H1/H6 được 60 ở cả hai lần; A5 giảm từ 85 xuống 75. Điểm judge là ước lượng và câu trả lời có thể dao động giữa các lần chạy.
+- Giới hạn so sánh: Hai file hiện có cùng cấu hình nhưng được tạo bằng code hiện tại; không còn artifact của phiên bản agent trước cải tiến để đo tác động nhân quả của thay đổi prompt. Chi phí tiền tệ không có trong báo cáo usage.
 
 ## 5. Giới hạn
 
-Nêu giới hạn của điểm judge, của snapshot và của việc chỉ chạy một lần mỗi phiên bản.
+Điểm judge là ước lượng, có thể thiên lệch hoặc lỗi định dạng. Snapshot core được chụp ngày 09/11/2026 và tool chỉ tìm trong tối đa 50 incident gần nhất; nó không thể xác nhận lịch sử ngoài dữ liệu đó hoặc trạng thái live. Mỗi báo cáo hiện chấm đủ 22 case và cùng cấu hình OpenRouter/GPT-4o-mini. Tuy vậy, `eval_before.json` được chạy lại sau khi thay đổi agent đã có trong workspace, nên không đại diện cho code trước cải tiến; cần lưu baseline trước khi thay đổi trong lần thực hành sau để so sánh nhân quả hợp lệ.

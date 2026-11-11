@@ -1,13 +1,15 @@
 """Tests offline; FakeProvider là test double, không đánh giá năng lực model."""
 import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from agent import run_agent
 from status_tools import StatusTools
-from providers import Provider
+from providers import Provider, load_env_file
 
 
 def tool_call(call_id, name, arguments):
@@ -50,6 +52,15 @@ class ToolsTests(unittest.TestCase):
 
 
 class LoopTests(unittest.TestCase):
+    def test_core_prompt_states_evidence_and_time_boundaries(self):
+        fake = FakeProvider([final()])
+        result = run_agent('kiểm tra', fake, StatusTools())
+        self.assertEqual(result['status'], 'completed')
+        system_prompt = fake.histories[0][0]['content']
+        self.assertIn('không thể xác nhận', system_prompt)
+        self.assertIn('50 incident gần nhất', system_prompt)
+        self.assertIn('không kết luận trạng thái', system_prompt)
+
     def test_tool_result_is_returned_with_id(self):
         fake = FakeProvider([tool_call('call-1', 'get_status', '{"provider":"github"}'), final()])
         result = run_agent('kiểm tra', fake, StatusTools())
@@ -80,6 +91,15 @@ class LoopTests(unittest.TestCase):
 
 
 class ProviderTests(unittest.TestCase):
+    def test_load_env_file_preserves_process_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env_file = Path(directory) / '.env'
+            env_file.write_text('export GEMINI_API_KEY=file-key\nMODEL="file-model"\n', encoding='utf-8')
+            with patch.dict(os.environ, {'GEMINI_API_KEY': 'process-key'}, clear=True):
+                load_env_file(env_file)
+                self.assertEqual(os.environ['GEMINI_API_KEY'], 'process-key')
+                self.assertEqual(os.environ['MODEL'], 'file-model')
+
     @patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test'})
     @patch('providers.post_json')
     def test_anthropic_groups_results(self, post):
@@ -119,9 +139,10 @@ class FullTrajectoryTests(unittest.TestCase):
 
     def test_all_provider_adapters_form_requests_without_keys_leaking(self):
         sample = {'choices':[{'message':{'role':'assistant','content':'ok'},'finish_reason':'stop'}], 'usage':{}}
-        for name, key in [('openai','OPENAI_API_KEY'),('gemini','GEMINI_API_KEY'),('openrouter','OPENROUTER_API_KEY')]:
+        for name, key in [('openai','OPENAI_API_KEY'),('gemini','GEMINI_API_KEY'),('openrouter','OPENROUTER_API_KEY'),('starimg','STARIMG_API_KEY')]:
             with self.subTest(name=name), patch.dict('os.environ', {key:'dummy'}), patch('providers.post_json', return_value=sample) as post:
                 result = Provider(name,'test-model').complete([{'role':'user','content':'hello'}], [])
                 self.assertEqual(result['finish'], 'stop')
                 self.assertEqual(post.call_args.args[2]['model'], 'test-model')
                 self.assertIn('chat/completions', post.call_args.args[0])
+                self.assertEqual(post.call_args.args[1]['Authorization'], 'Bearer dummy')
