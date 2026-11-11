@@ -50,3 +50,11 @@ Nguyên nhân có thể xảy ra: câu trả lời dành nhiều chỗ liệt k�
 - Trace nhiều bước chạy thành công với snapshot: `get_status` (step 1) → `get_incident_details` (step 2) → câu trả lời cuối (step 3), có URL incident Cloudflare.
 - Trace lỗi giả lập: `get_status` trả `TimeoutError`; agent hoàn tất ở step 2 bằng cách nói rõ không xác minh được trạng thái, không suy luận outage.
 - Còn thao tác thủ công: xác nhận tên repo theo quy tắc trong `SUBMISSION.md` và nộp link repo lên LMS.
+
+## 7. Thử thách bonus
+
+- Kết quả `eval_bonus.json`: 10/10 case được chấm; 97.90/100, tương đương 14.69/15 điểm bonus tham khảo. Cấu hình: Starimg / `gemini-3.8-flash`, tối đa 16 bước.
+- Agent gọi đủ status tools được yêu cầu, lấy thêm các trang incident khi cần, thử lại lỗi 429 có giới hạn và sửa tham số sau `INVALID_ARGUMENTS`. Tên các provider được hỏi nhưng chưa kiểm tra sẽ được yêu cầu gọi trước khi hoàn tất.
+- 160 mục `distractors` được loại khỏi observation gửi cho model để giảm context; bản kết quả đầy đủ vẫn giữ trong trace phục vụ kiểm tra. Test xác nhận cả hai hành vi.
+- Đối chiếu B10: judge chấm 84 và nhận xét trạng thái Vercel chưa được xác minh; tuy nhiên trace có lần retry Vercel thành công với `indicator: none`, và câu trả lời nêu `All Systems Operational`. Cần xem đây là bất đồng của judge, không phải kết luận chắc chắn có hallucination. B8 được 95.
+- Hạn chế còn lại: điểm judge chỉ là tham khảo; chi phí tiền tệ không có trong báo cáo usage. Snapshot không đại diện cho trạng thái live.

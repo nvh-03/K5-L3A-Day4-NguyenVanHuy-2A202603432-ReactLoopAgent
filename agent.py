@@ -1,5 +1,6 @@
 """Status investigation agent loop."""
 import json
+import re
 
 from status_tools import SCHEMAS
 
@@ -41,6 +42,15 @@ def run_agent(question, provider, tools, max_steps=6):
         {'role': 'user', 'content': question},
     ]
     incident_sources = set()
+    requested_status_tools = []
+    for tool_schema in schemas:
+        function = tool_schema.get('function', {}) if isinstance(tool_schema, dict) else {}
+        name = function.get('name') if isinstance(function, dict) else None
+        if not isinstance(name, str) or not name.startswith('get_') or not name.endswith('_status'):
+            continue
+        provider_name = name[len('get_'):-len('_status')]
+        if re.search(r'(?<!\w)' + re.escape(provider_name) + r'(?!\w)', question, re.IGNORECASE):
+            requested_status_tools.append(name)
 
     for step in range(1, max_steps + 1):
         try:
@@ -110,7 +120,11 @@ def run_agent(question, provider, tools, max_steps=6):
                     }
 
             try:
-                tool_content = json.dumps(tool_result, ensure_ascii=False)
+                observation = tool_result
+                if isinstance(tool_result, dict) and isinstance(tool_result.get('distractors'), list):
+                    observation = {key: value for key, value in tool_result.items() if key != 'distractors'}
+                    observation['distractors_omitted'] = len(tool_result['distractors'])
+                tool_content = json.dumps(observation, ensure_ascii=False)
             except (TypeError, ValueError) as exc:
                 tool_result = {
                     'ok': False,
@@ -148,6 +162,24 @@ def run_agent(question, provider, tools, max_steps=6):
             answer = str(answer)
         if finish != 'stop':
             return result('error', f'Model dừng với lý do không hoàn tất: {finish!r}.')
+
+        called_tools = {item.get('name') for item in trace if item.get('event') == 'tool'}
+        missing_status_tools = [name for name in requested_status_tools if name not in called_tools]
+        if missing_status_tools:
+            trace.append({
+                'event': 'validation_missing_status_tools',
+                'step': step,
+                'missing_tools': missing_status_tools,
+            })
+            answer = ''
+            messages.append({
+                'role': 'user',
+                'content': (
+                    'Trước khi trả lời, hãy gọi status tool cho từng provider được hỏi '
+                    'mà bạn chưa kiểm tra: ' + ', '.join(missing_status_tools) + '.'
+                ),
+            })
+            continue
 
         missing_sources = sorted(source for source in incident_sources if source not in answer)
         if missing_sources:

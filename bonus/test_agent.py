@@ -51,4 +51,28 @@ class BonusAgentTests(unittest.TestCase):
         self.assertEqual(json.loads(p.histories[1][-1]['content'])['error'],'INVALID_ARGUMENTS')
         self.assertTrue(json.loads(p.histories[2][-1]['content'])['ok'])
 
+    def test_distractors_are_omitted_from_model_context_but_kept_in_trace(self):
+        t=BonusTools(scenario='noisy')
+        p=ScriptedProvider([call('a','get_vercel_status',{}),final()])
+        result=run_agent('Kiểm tra Vercel',p,t,max_steps=3)
+        observation=json.loads(p.histories[1][-1]['content'])
+        tool_trace=next(x for x in result['trace'] if x.get('event')=='tool')
+        self.assertEqual(observation['distractors_omitted'],160)
+        self.assertNotIn('distractors',observation)
+        self.assertEqual(len(tool_trace['result']['distractors']),160)
+
+    def test_explicitly_requested_status_tools_are_checked_before_completion(self):
+        t=BonusTools()
+        p=ScriptedProvider([
+            call('a','get_github_status',{}),
+            final(),
+            call('b','get_npm_status',{}),
+            final('GitHub và npm đã được kiểm tra.'),
+        ])
+        result=run_agent('Kiểm tra GitHub và npm.',p,t,max_steps=6)
+        self.assertEqual(result['status'],'completed')
+        names=[x['name'] for x in result['trace'] if x.get('event')=='tool']
+        self.assertEqual(names,['get_github_status','get_npm_status'])
+        self.assertIn('validation_missing_status_tools',[x['event'] for x in result['trace']])
+
 if __name__=='__main__': unittest.main()
